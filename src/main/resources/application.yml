@@ -1,0 +1,17 @@
+# 应用服务 WEB 访问端口
+server:
+  port: 9999
+  servlet:
+    context-path:   /api    #上下文路径  直接输入9999无法访问 要输入 9999/api才行
+
+spring:
+  application:
+    name: SCG-picture-backend
+
+    #数据库配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3366/scg_picture
+    username: root
+    password: root
+

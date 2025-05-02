@@ -1,9 +1,11 @@
 package com.scg.scgpicturebackend.common;
 
 import com.scg.scgpicturebackend.exception.ErrorCode;
+import lombok.Data;
 
 import java.io.Serializable;
 
+@Data
 //基础封装类 后端响应前端要响应什么内容 Serializable序列化 为了在各种情况都可以传输
 public class BaseResponse<T> implements Serializable {
     private int code;  //状态码

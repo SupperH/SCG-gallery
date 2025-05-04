@@ -37,7 +37,7 @@ public class UserController {
         ThrowUtils.throwIf(userRegisterRequest == null , ErrorCode.PARAMS_ERROR);
 
         String userAccount = userRegisterRequest.getUserAccount();
-        String userpassword = userRegisterRequest.getUserpassword();
+        String userpassword = userRegisterRequest.getUserPassword();
         String checkPassword = userRegisterRequest.getCheckPassword();
 
         long result = userService.userRegister(userAccount, userpassword, checkPassword);
@@ -46,12 +46,12 @@ public class UserController {
     }
 
     //用户登录
-    @PostMapping("/Login")
+    @PostMapping("/login")
     public BaseResponse<LoginUserVO> userLogin(@RequestBody UserLoginRequest userLoginRequest, HttpServletRequest request){
         ThrowUtils.throwIf(userLoginRequest == null , ErrorCode.PARAMS_ERROR);
 
         String userAccount = userLoginRequest.getUserAccount();
-        String userpassword = userLoginRequest.getUserpassword();
+        String userpassword = userLoginRequest.getUserPassword();
 
         LoginUserVO loginUserVO = userService.userLogin(userAccount, userpassword, request);
 
@@ -120,7 +120,7 @@ public class UserController {
     /**
      * 删除用户 仅管理员用
      */
-    @DeleteMapping("/delete")
+    @PostMapping("/delete")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Boolean> deleteUser(@RequestBody DeleteRequest deleteRequest) {
         if (deleteRequest == null || deleteRequest.getId() <= 0) {

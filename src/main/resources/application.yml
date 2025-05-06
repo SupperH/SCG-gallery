@@ -3,6 +3,9 @@ server:
   port: 9999
   servlet:
     context-path:   /api    #上下文路径  直接输入9999无法访问 要输入 9999/api才行
+    session:
+      cookie:
+        max-age: 2592000 #cookie 30天过期
 
 spring:
   profiles:
@@ -16,6 +19,19 @@ spring:
     url: jdbc:mysql://localhost:3366/scg_picture
     username: root
     password: root
+
+#redis配置
+  redis:
+    database: 0
+    host: 127.0.0.1
+    port: 6379
+    timeout: 50000
+
+#session配置 内容存储到redis
+  session:
+    store-type: redis
+    timeout: 2592000 #30天
+
   #开发更大的文件上传体积
   servlet:
     multipart:

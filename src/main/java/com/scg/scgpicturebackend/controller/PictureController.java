@@ -1,9 +1,13 @@
 package com.scg.scgpicturebackend.controller;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.util.RandomUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.qcloud.cos.model.COSObject;
 import com.qcloud.cos.model.COSObjectInputStream;
 import com.qcloud.cos.utils.IOUtils;
@@ -26,6 +30,8 @@ import com.scg.scgpicturebackend.service.PictureService;
 import com.scg.scgpicturebackend.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.util.DigestUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -33,9 +39,12 @@ import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.File;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/picture")
@@ -47,6 +56,18 @@ public class PictureController {
 
     @Resource
     private PictureService pictureService;
+
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
+
+    /*本地缓存*/
+    private final Cache<String, String> LOCAL_CACHE = Caffeine.newBuilder()
+            .initialCapacity(1024) //初始容量
+            .maximumSize(10_000L) // 最大 10000 条
+            // 缓存 5 分钟后移除
+            .expireAfterWrite(Duration.ofMinutes(5))
+            .build();
 
     //上传图片 可以重新上传
     /*这个接口是选择完图片就会进行调用 然后上传到服务器把图片信息和谁上传的入库
@@ -97,6 +118,9 @@ public class PictureController {
         //操作数据库
         boolean result = pictureService.removeById(id);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+
+        //清理图片资源 cos
+        pictureService.clearPictureFile(oldPicture);
 
         return ResultUtils.success(true);
     }
@@ -210,6 +234,67 @@ public class PictureController {
 
         /*把数据脱敏 然后这个方法里还会关联查询到的图片和这个图片对应的脱敏后的用户信息*/
         Page<PictureVO> pictureVOPage = pictureService.getPictureVOPage(page, request);
+
+        return ResultUtils.success(pictureVOPage);
+    }
+
+    /**
+     * 分页获取图片列表（封装类）脱敏 首页展示用
+     * 查询出来的条数和上面的方法一样 但是上面的不会脱敏 因为需要进行管理
+     */
+    //todo 带缓存版本(redis/本地缓存)的首页查询 目前没有开放 只做学习用 使用的还是非缓存方式查询
+    @PostMapping("/list/page/vo/cache")
+    public BaseResponse<Page<PictureVO>> listPictureVOByPageWithCache(@RequestBody PictureQueryRequest pictureQueryRequest,
+                                                             HttpServletRequest request) {
+
+        int current = pictureQueryRequest.getCurrent();
+        int size = pictureQueryRequest.getPageSize();
+
+        //不允许用户一次查询超过20防止爬虫
+        ThrowUtils.throwIf(size > 20 , ErrorCode.PARAMS_ERROR);
+
+        /*前台的首页只能查询到审核通过的数据*/
+        pictureQueryRequest.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
+
+        //查询缓存，没有再去数据库
+        //构建缓存，转成md5
+        String queryCondition = JSONUtil.toJsonStr(pictureQueryRequest);
+        String hashKey = DigestUtils.md5DigestAsHex(queryCondition.getBytes());
+        String cachKey = String.format("scgpicture:listPictureVOByPage:%s", hashKey);
+
+        /*1. 先操作本地缓存查询*/
+        String cachedValue = LOCAL_CACHE.getIfPresent(cachKey);
+        if(cachedValue != null){
+            //缓存命中，反序列化返回
+            Page<PictureVO> cachedPage = JSONUtil.toBean(cachedValue, Page.class);
+            return ResultUtils.success(cachedPage);
+        }
+
+        /*2. 本地缓存未命中，操作redis缓存查询*/
+        cachedValue = stringRedisTemplate.opsForValue().get(cachKey);
+        if(cachedValue != null){
+            //缓存命中，更新本地缓存 反序列化返回
+            LOCAL_CACHE.put(cachKey, cachedValue);
+            Page<PictureVO> cachedPage = JSONUtil.toBean(cachedValue, Page.class);
+
+            return ResultUtils.success(cachedPage);
+        }
+
+        //构建查询体 就是拼接sql在里面
+        QueryWrapper<Picture> queryWrapper = pictureService.getQueryWrapper(pictureQueryRequest);
+
+        //执行分页查询
+        Page<Picture> page = pictureService.page(new Page<>(current, size), queryWrapper);
+
+        /*把数据脱敏 然后这个方法里还会关联查询到的图片和这个图片对应的脱敏后的用户信息*/
+        Page<PictureVO> pictureVOPage = pictureService.getPictureVOPage(page, request);
+
+        /*3. 存入redis缓存 设置随机过期时间 避免同时过期导致雪崩*/
+        String cacheValue = JSONUtil.toJsonStr(pictureVOPage);
+        int cacheExpireTIme = 300 + RandomUtil.randomInt(0,300);
+        stringRedisTemplate.opsForValue().set(cachKey, cacheValue, cacheExpireTIme, TimeUnit.SECONDS);
+        /*4. 存入本地缓存*/
+        LOCAL_CACHE.put(cachKey, cacheValue);
 
         return ResultUtils.success(pictureVOPage);
     }

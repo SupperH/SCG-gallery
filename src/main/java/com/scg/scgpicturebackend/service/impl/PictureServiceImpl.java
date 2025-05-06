@@ -10,6 +10,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.scg.scgpicturebackend.exception.BusinessException;
 import com.scg.scgpicturebackend.exception.ErrorCode;
 import com.scg.scgpicturebackend.exception.ThrowUtils;
+import com.scg.scgpicturebackend.manager.CosManager;
 import com.scg.scgpicturebackend.manager.FileManager;
 import com.scg.scgpicturebackend.manager.upload.FilePictureUpload;
 import com.scg.scgpicturebackend.manager.upload.PictureUploadTemplate;
@@ -33,6 +34,8 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.BindException;
 import org.springframework.web.multipart.MultipartFile;
@@ -67,6 +70,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
     @Resource
     private UrlPictureUpload urlPictureUpload;
+    @Autowired
+    private CosManager cosManager;
 
     @Override
     public PictureVO uploadPicture(Object inputSource, PictureUploadRequest pictureUploadRequest, User loginUser) {
@@ -77,9 +82,13 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         if (pictureUploadRequest != null){
             pictureId = pictureUploadRequest.getId();
         }
+
+        // 更新之前先查询老的图片信息 用作后续去cos删除图片用 因为更新后数据库url变了 无法溯源cos数据
+        Picture oldPicture = null;
+
         //如果是更新 还要判断图片是否存在 以及判断审核状态
         if(pictureId != null){
-            Picture oldPicture = this.getById(pictureId);
+            oldPicture = this.getById(pictureId);
             ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR,"图片不存在");
 
             /*只有本人或管理员可以编辑图片*/
@@ -106,6 +115,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         //构造要入库的图片信息
         Picture picture = new Picture();
         picture.setUrl(uploadPictureResult.getUrl());
+        picture.setThumbnailUrl(uploadPictureResult.getThumbnailUrl()); //缩略图地址
 
         //修改图片名命名规则 如果是普通的单图片上传 直接用原始的图片名 如果是批量上传 那么会给request设置图片名，那么就用我们自定义的图片名入库
         String picName = uploadPictureResult.getPicName();
@@ -133,6 +143,13 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
         //保存到数据库 saveorupdate就是有就更新没有就插入
         boolean result = this.saveOrUpdate(picture);
+
+        //TODO 如果是更新 删除图片资源
+        //清理图片资源 cos
+        if(oldPicture != null){
+            this.clearPictureFile(oldPicture);
+        }
+
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
 
         //转换成vo类 返回 脱敏
@@ -384,6 +401,31 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         }
 
         return uploadCount;
+    }
+
+    //异步执行，删除操作异步执行 先返回前端信息 要用这个功能 要改main启动类加注解
+    // 这个注解会开启一个线程执行任务 他默认使用的线程池为SimpleAsyncTaskExecutor
+    @Async
+    @Override
+    public void clearPictureFile(Picture oldPicture) {
+        //判断该图片是否被多条记录使用
+        String pictureUrl = oldPicture.getUrl();
+        long count = this.lambdaQuery()
+                .eq(Picture::getUrl, pictureUrl)
+                .count();
+
+        //有不止一条记录用到了该图片 不清理
+        if(count > 1){
+            return;
+        }
+
+        //删除图片
+        cosManager.deleteObject(pictureUrl);
+        //删除缩略图
+        String thumbnailUrl = oldPicture.getThumbnailUrl();
+        if(StrUtil.isNotBlank(thumbnailUrl)){
+            cosManager.deleteObject(thumbnailUrl);
+        }
     }
 }
 

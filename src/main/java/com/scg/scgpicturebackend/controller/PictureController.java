@@ -16,12 +16,10 @@ import com.scg.scgpicturebackend.exception.BusinessException;
 import com.scg.scgpicturebackend.exception.ErrorCode;
 import com.scg.scgpicturebackend.exception.ThrowUtils;
 import com.scg.scgpicturebackend.manager.CosManager;
-import com.scg.scgpicturebackend.model.dto.picture.PictureEditRequest;
-import com.scg.scgpicturebackend.model.dto.picture.PictureQueryRequest;
-import com.scg.scgpicturebackend.model.dto.picture.PictureUpdateRequest;
-import com.scg.scgpicturebackend.model.dto.picture.PictureUploadRequest;
+import com.scg.scgpicturebackend.model.dto.picture.*;
 import com.scg.scgpicturebackend.model.entity.Picture;
 import com.scg.scgpicturebackend.model.entity.User;
+import com.scg.scgpicturebackend.model.enums.PictureReviewStatusEnum;
 import com.scg.scgpicturebackend.model.vo.PictureTagCategory;
 import com.scg.scgpicturebackend.model.vo.PictureVO;
 import com.scg.scgpicturebackend.service.PictureService;
@@ -54,7 +52,7 @@ public class PictureController {
     /*这个接口是选择完图片就会进行调用 然后上传到服务器把图片信息和谁上传的入库
     * 之后点击创建按钮调用的其实是edit 用来补全描述信息*/
     @PostMapping("/upload")
-    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    //@AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<PictureVO> uploadPicture(
             @RequestPart("file") MultipartFile multipartFile,
             PictureUploadRequest pictureUploadRequest,
@@ -62,6 +60,19 @@ public class PictureController {
 
         User loginUser = userService.getLoginUser(request);
         PictureVO pictureVO = pictureService.uploadPicture(multipartFile, pictureUploadRequest, loginUser);
+
+        return ResultUtils.success(pictureVO);
+
+    }
+
+    //使用url地址上传图片
+    @PostMapping("/upload/url")
+    public BaseResponse<PictureVO> uploadPictureByUrl(
+            @RequestBody PictureUploadRequest pictureUploadRequest,
+            HttpServletRequest request){
+
+        User loginUser = userService.getLoginUser(request);
+        PictureVO pictureVO = pictureService.uploadPicture(pictureUploadRequest.getFileUrl(), pictureUploadRequest, loginUser);
 
         return ResultUtils.success(pictureVO);
 
@@ -99,7 +110,7 @@ public class PictureController {
     /*这个目前没用到 管理员用的也是editPicture 考虑废除*/
     @PostMapping("/update")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<Boolean> updatePicture(@RequestBody PictureUpdateRequest pictureUpdateRequest) {
+    public BaseResponse<Boolean> updatePicture(@RequestBody PictureUpdateRequest pictureUpdateRequest,HttpServletRequest request) {
         if (pictureUpdateRequest == null || pictureUpdateRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
@@ -114,6 +125,9 @@ public class PictureController {
         long id = pictureUpdateRequest.getId();
         Picture oldPicture = pictureService.getById(id);
         ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR);
+
+        /*补充审核参数*/
+        pictureService.fillReviewParams(oldPicture, userService.getLoginUser(request));
 
         // 操作数据库
         boolean result = pictureService.updateById(picture);
@@ -148,7 +162,6 @@ public class PictureController {
         Picture picture = pictureService.getById(id);
 
         ThrowUtils.throwIf(picture == null, ErrorCode.NOT_FOUND_ERROR);
-
 
         return ResultUtils.success(pictureService.getPictureVO(picture, request));
     }
@@ -185,7 +198,11 @@ public class PictureController {
 
         //不允许用户一次查询超过20防止爬虫
         ThrowUtils.throwIf(size > 20 , ErrorCode.PARAMS_ERROR);
-        //构建查询提
+
+        /*前台的首页只能查询到审核通过的数据*/
+        pictureQueryRequest.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
+
+        //构建查询体 就是拼接sql在里面
         QueryWrapper<Picture> queryWrapper = pictureService.getQueryWrapper(pictureQueryRequest);
 
         //执行分页查询
@@ -220,6 +237,9 @@ public class PictureController {
 
         User loginUser = userService.getLoginUser(request);
 
+        /*补充审核参数*/
+        pictureService.fillReviewParams(picture, loginUser);
+
         // 判断是否存在
         long id = pictureEditRequest.getId();
         /*查询图片从数据库*/
@@ -242,11 +262,34 @@ public class PictureController {
     public BaseResponse<PictureTagCategory> listPictureTagCategory() {
         PictureTagCategory pictureTagCategory = new PictureTagCategory();
         /*写死了 后面要用数据库存储动态获取*/
-        List<String> tagList = Arrays.asList("热门", "搞笑", "生活", "高清", "艺术", "校园", "背景", "简历", "创意");
-        List<String> categoryList = Arrays.asList("模板", "电商", "表情包", "素材", "海报");
+        List<String> tagList = Arrays.asList("热门", "动漫", "生活", "高清", "艺术", "校园", "背景", "简历", "创意");
+        List<String> categoryList = Arrays.asList("壁纸", "电商", "表情包", "素材", "海报");
         pictureTagCategory.setTagList(tagList);
         pictureTagCategory.setCategoryList(categoryList);
         return ResultUtils.success(pictureTagCategory);
+    }
+
+    //审核图片 仅管理员
+    @PostMapping("/review")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Boolean> doPictureReview(@RequestBody PictureReviewRequest pictureReviewRequest,HttpServletRequest request) {
+
+        ThrowUtils.throwIf(pictureReviewRequest == null, ErrorCode.PARAMS_ERROR);
+        pictureService.doPictureReview(pictureReviewRequest, userService.getLoginUser(request));
+
+        return ResultUtils.success(true);
+    }
+
+    //批量抓取并创建图片 仅管理员
+    @PostMapping("/upload/batch")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Integer> uploadPictureByBatch(@RequestBody PictureUploadByBatchRequest pictureUploadByBatchRequest,
+                                                      HttpServletRequest request) {
+
+        ThrowUtils.throwIf(pictureUploadByBatchRequest == null, ErrorCode.PARAMS_ERROR);
+        int uploadCount = pictureService.uploadPictureByBatch(pictureUploadByBatchRequest, userService.getLoginUser(request));
+
+        return ResultUtils.success(uploadCount);
     }
 }
 

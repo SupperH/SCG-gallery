@@ -30,6 +30,13 @@ public class FileController {
     @Resource
     private CosManager cosManager;
 
+    @PostMapping("/test/delete")
+    public BaseResponse<Boolean> testDeleteFile(String filepath) {
+        cosManager.deleteObject(filepath);
+        return ResultUtils.success(true);
+    }
+
+
     //测试文件上传 使用requestpart接收前端参数
     @PostMapping("/test/upload")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)

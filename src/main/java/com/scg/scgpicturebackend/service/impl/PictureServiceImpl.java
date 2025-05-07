@@ -561,13 +561,20 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             return;
         }
 
-        //删除图片
-        cosManager.deleteObject(pictureUrl);
-        //删除缩略图
-        String thumbnailUrl = oldPicture.getThumbnailUrl();
-        if(StrUtil.isNotBlank(thumbnailUrl)){
-            cosManager.deleteObject(thumbnailUrl);
-        }
+        /*需要处理获取的url 因为腾讯云cos删除传的是bucket和图片路径 图片路径不用拼接bucket
+        * 这里数据库存的带bucket*/
+        int seperateIndex = pictureUrl.indexOf(".com");
+        String seperatedUrl = pictureUrl.substring(seperateIndex+4, pictureUrl.length());
+            //删除图片
+            cosManager.deleteObject(seperatedUrl);
+            //删除缩略图
+            String thumbnailUrl = oldPicture.getThumbnailUrl();
+            if(StrUtil.isNotBlank(thumbnailUrl)){
+                seperateIndex = thumbnailUrl.indexOf(".com");
+                seperatedUrl = thumbnailUrl.substring(seperateIndex+4, thumbnailUrl.length());
+
+                cosManager.deleteObject(seperatedUrl);
+            }
     }
 
     @Override

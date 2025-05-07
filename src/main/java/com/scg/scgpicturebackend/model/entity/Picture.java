@@ -2,6 +2,7 @@ package com.scg.scgpicturebackend.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 
+import java.io.Serializable;
 import java.util.Date;
 import lombok.Data;
 
@@ -11,7 +12,7 @@ import lombok.Data;
  */
 @TableName(value ="picture")
 @Data
-public class Picture implements java.io.Serializable{
+public class Picture implements Serializable {
     /**
      * id
      */

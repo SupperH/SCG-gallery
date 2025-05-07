@@ -237,6 +237,92 @@ CDN使用起来简单，但是怎么安全的使用很麻烦
 
 
 
+# 空间模块
+管理员 管理空间  
+用户创建私有空间  
+私有空间权限控制  
+空间级别和限额控制  
+
+私有空间上传图片不需要管理员进行审核  
+把空间抽象出来 和之前公共图库完全分开 尽量只额外增加空间相关的逻辑和代码 减少对代码的修改  
+后续还要开发团队共享空间  
+
+**空间管理**  
+crud  
+
+**创建私有空间，但是需要加限制，最多只能创建一个**  
+使用**加锁+事务**解决 SpaceService.addSpace  
+```java
+ @Override
+    @Transactional
+    public long addSpace(SpaceAddRequest spaceAddRequest, User loginUser) {
+        //1.填充参数默认值
+        //转换实体类和DTO
+        Space space = new Space();
+        BeanUtils.copyProperties(spaceAddRequest, space);
+        /*设置默认值*/
+        if(StrUtil.isBlank(space.getSpaceName())){
+            space.setSpaceName("默认空间");
+        }
+        if(space.getSpaceLevel() == null){
+            space.setSpaceLevel(SpaceLevelEnum.COMMON.getValue());
+        }
+        /*填充容量和大小*/
+        this.fillSpaceBySpaceLevel(space);
+
+        //2.校验参数
+        this.validSpace(space,true);
+
+        //3.校验权限 非管理员只能创建普通空间
+        Long userId = loginUser.getId();
+        space.setUserId(userId);
+
+        if(SpaceLevelEnum.COMMON.getValue() != space.getSpaceLevel() && !userService.isAdmin(loginUser)){
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR,"非管理员只能创建普通空间");
+        }
+
+        //4.控制同一个用户只能创建一个私有空间 加锁
+        /*相同值的对象是有同一个存储空间的 使用intern 这样的话不同的string对象但是值一样可以得到同一个数据*/
+        String lock = String.valueOf(userId).intern();
+        //根据用户id 为相同用户加锁
+        synchronized (lock){
+            //根据userid去space表判断用户是否已经创建过空间
+            boolean exists = this.lambdaQuery()
+                    .eq(Space::getUserId, userId)
+                    .exists(); // exists比count快 因为count是扫全表
+
+            //如果已有空间 不能再创建
+            ThrowUtils.throwIf(exists,ErrorCode.OPERATION_ERROR,"用户已经创建过空间");
+            boolean save = this.save(space);
+            ThrowUtils.throwIf(!save,ErrorCode.OPERATION_ERROR,"保存空间信息到数据库失败");
+
+            //返回新写入的数据id
+            return space.getId();
+        }
+    }
+```
+**注意：这里使用transactional注解实现事务是有问题的**  
+
+**因为注解打在方法上 ，交给spring去管理，spring会在方法执行完毕后提交，事务在没有提交之前 数据库查询的数据不是最新的
+假如两个用户前后准备进入锁的临界区 然后A用户执行完 锁释放了 但是这个时候事务还没有提交，但是锁释放了
+B可以进入临界区执行逻辑 而且由于事务没提交 查询的数据不是最新的 B也插入成功 这就会导致冲突**
+
+所以这里使用编程式事务，而不是注解事务
+
+**私有空间权限控制**  
+对之前所有的图片操作都添加空间有关的权限校验逻辑
+
+**空间级别和限额操作**  
+每次上传图片前，都要校验空间剩余额度是否足够，每次上传和删除图片时，都要更新额度  
+这里优化业务 对业务进行优化  
+比如：  
+单张图片最大5m，即便空间满了再允许上传一张图片影响也不大
+即便有用户在超额前瞬间大量上传图片，对系统的影响也不大，后续可以通过限流+定时任务检测空间等策略，尽早发现这些特殊情况的发生
+pictureServiceImpl.uploadPicture
+
+**目前放开了前端创建图片按钮的条件判断 做测试 后期要把判断加回去 因为严格来说创建图片是只有空间管理员可以做的 这个空间可以升级为团队空间**
+
+
 
 
 

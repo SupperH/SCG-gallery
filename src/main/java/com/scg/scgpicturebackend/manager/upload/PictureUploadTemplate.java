@@ -87,7 +87,7 @@ public abstract class PictureUploadTemplate {
                 }
 
                 //封装压缩图的返回结果
-                return buildResult(originalFilename,compressedCiObject,thumbnailCiObject);
+                return buildResult(originalFilename,compressedCiObject,thumbnailCiObject,imageInfo);
             }
             //构造返回结果
             return buildResult(imageInfo, uploadPath, originalFilename, file);
@@ -134,6 +134,8 @@ public abstract class PictureUploadTemplate {
         uploadPictureResult.setPicHeight(picHeight);
         uploadPictureResult.setPicScale(picScale);
         uploadPictureResult.setPicFormat(imageInfo.getFormat());
+        uploadPictureResult.setPicColor(imageInfo.getAve()); //获取图片主色调 cos提供
+
 
         //返回可访问的地址
         return uploadPictureResult;
@@ -143,7 +145,10 @@ public abstract class PictureUploadTemplate {
      * 构建返回结果压缩后的
      * @return
      */
-    private UploadPictureResult buildResult(String originalFilename, CIObject compressedCiObject,CIObject thumbnailCiObject) {
+    private UploadPictureResult buildResult(String originalFilename,
+                                            CIObject compressedCiObject,
+                                            CIObject thumbnailCiObject,
+                                            ImageInfo imageInfo) {
         int picWidth = compressedCiObject.getWidth();
         int picHeight = compressedCiObject.getHeight();
         //计算宽高比
@@ -161,6 +166,8 @@ public abstract class PictureUploadTemplate {
         uploadPictureResult.setPicFormat(compressedCiObject.getFormat());
         //缩略图地址
         uploadPictureResult.setThumbnailUrl(cosClientConfig.getHost() + "/" + thumbnailCiObject.getKey());
+
+        uploadPictureResult.setPicColor(imageInfo.getAve()); //获取图片主色调 cos提供
 
 
         //返回可访问的地址

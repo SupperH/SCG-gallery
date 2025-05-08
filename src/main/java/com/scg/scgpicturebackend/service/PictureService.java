@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletRequest;
+import java.util.List;
 
 /**
 * @author 53233
@@ -80,4 +81,10 @@ public interface PictureService extends IService<Picture> {
 
     //校验空间图片的权限 判断用户是否可见
     void checkPictureAuth(User loginUser, Picture picture);
+
+    //根据颜色查询图片
+    List<PictureVO> searchPictureByColor(Long spaceId, String picColor, User loginUser);
+
+    //批量更改图片
+    void editPictureByBatch(PictureEditByBatchRequest pictureEditByBatchRequest, User loginUser);
 }

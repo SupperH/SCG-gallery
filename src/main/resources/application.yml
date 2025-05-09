@@ -70,5 +70,8 @@ knife4j:
 #    region:
 #    bucket:
 
+# 阿里云百炼AI配置
+#aliYunAi:
+#  apiKey:
 
 

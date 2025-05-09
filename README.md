@@ -383,10 +383,47 @@ spring表达式简称SpEL用于在spring配置文件或java代码中动态的查
 public User getUser(Long id, Locale locale){
 return userService.getUser(id,locale);
 }
-```
-
+```  
 
 他的实现方式不是字符串替换，而是用到了AST抽象语法树对字符串进行解析
+
+
+# **AI图片编辑**  
+
+**基础图片编辑**   **纯前端**
+功能 裁剪多余部分，旋转图片，放大缩小尺寸 
+**注意： 这个需要去cos中配置跨域**
+因为我们本地是localhost 然后对象存储的地址和我们本地不是一个地址 会出现跨域问题
+在腾讯云cos-安全管理-跨域访问cors设置中 配置我们的地址即可
+
+**AI图片编辑-扩图**  
+AI绘图大模型选择**阿里云百炼**  
+https://bailian.console.aliyun.com/?tab=api#/doc/?type=model&url=https%3A%2F%2Fhelp.aliyun.com%2Fdocument_detail%2F2796845.html  
+云百炼使用的是异步的方式 因为扩图耗时会比较大 所以为了减少服务器压力 所以使用异步调用  
+所以客户端调用接口要轮询检查任务是否完成，完成就获取图片  
+**这里使用前端轮询请求后端接口 然后后端去调用ai**  
+
+在api包下创建阿里云百炼api需要的实体类 然后参考文档写代码即可
+
+
+# 图库分析  
+用户空间图库分析  
+管理员全空间分析
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
 
 
 

@@ -3,6 +3,7 @@ package com.scg.scgpicturebackend.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.scg.scgpicturebackend.api.aliyunai.model.CreateOutPaintingTaskResponse;
 import com.scg.scgpicturebackend.common.DeleteRequest;
 import com.scg.scgpicturebackend.model.dto.picture.*;
 import com.scg.scgpicturebackend.model.dto.user.UserQueryRequest;
@@ -87,4 +88,7 @@ public interface PictureService extends IService<Picture> {
 
     //批量更改图片
     void editPictureByBatch(PictureEditByBatchRequest pictureEditByBatchRequest, User loginUser);
+
+    //创建扩图任务
+    CreateOutPaintingTaskResponse createPictureOutPaintingTask(CreatePictureOutPaintingTaskRequest createPictureOutPaintingTaskRequest, User loginUser);
 }

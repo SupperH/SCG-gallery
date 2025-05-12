@@ -10,6 +10,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.scg.scgpicturebackend.constant.UserConstant;
 import com.scg.scgpicturebackend.exception.BusinessException;
 import com.scg.scgpicturebackend.exception.ErrorCode;
+import com.scg.scgpicturebackend.manager.auth.StpKit;
 import com.scg.scgpicturebackend.model.dto.user.UserQueryRequest;
 import com.scg.scgpicturebackend.model.entity.User;
 import com.scg.scgpicturebackend.model.enums.UserRoleEnum;
@@ -111,6 +112,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         //4.保存用户登录态 获取session set值
         request.getSession().setAttribute(UserConstant.USER_LOGIN_STATE, user);
+
+        /*保存登录信息到sa-token 便于空间鉴权时使用，注意保证用户信息与springsession过期信息时间一致*/
+        StpKit.SPACE.login(user.getId());
+        StpKit.SPACE.getSession().set(UserConstant.USER_LOGIN_STATE, user);
 
         //5.返回脱敏数据
         return this.getLoginUserVO(user);

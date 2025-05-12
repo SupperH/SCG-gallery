@@ -14,6 +14,7 @@ import com.scg.scgpicturebackend.constant.UserConstant;
 import com.scg.scgpicturebackend.exception.BusinessException;
 import com.scg.scgpicturebackend.exception.ErrorCode;
 import com.scg.scgpicturebackend.exception.ThrowUtils;
+import com.scg.scgpicturebackend.manager.auth.SpaceUserAuthManager;
 import com.scg.scgpicturebackend.model.dto.picture.*;
 import com.scg.scgpicturebackend.model.dto.space.*;
 import com.scg.scgpicturebackend.model.entity.Picture;
@@ -53,6 +54,9 @@ public class SpaceController {
 
     @Resource
     private SpaceService spaceService;
+
+    @Resource
+    private SpaceUserAuthManager spaceUserAuthManager;
 
     //创建空间
     @PostMapping("/add")
@@ -144,7 +148,14 @@ public class SpaceController {
 
         ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR);
 
-        return ResultUtils.success(spaceService.getSpaceVO(space, request));
+        SpaceVO spaceVO = spaceService.getSpaceVO(space, request);
+
+        /*设置权限列表*/
+        User loginUser = userService.getLoginUser(request);
+        List<String> permissionList = spaceUserAuthManager.getPermissionList(space, loginUser);
+        spaceVO.setPermissionList(permissionList);
+
+        return ResultUtils.success(spaceVO);
     }
 
     /**

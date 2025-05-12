@@ -80,6 +80,7 @@ public interface PictureService extends IService<Picture> {
     //清理图片文件，会删除cos上的内容
     void clearPictureFile(Picture oldPicture);
 
+    /*目前改为satoken统一权限校验 所以不需要调用这个方法校验权限了*/
     //校验空间图片的权限 判断用户是否可见
     void checkPictureAuth(User loginUser, Picture picture);
 

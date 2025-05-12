@@ -99,10 +99,11 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         if(spaceId != null){
             Space space = spaceService.getById(spaceId);
             ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR,"空间不存在");
+            /*改为使用统一的satoken权限校验*/
             //校验是否有空间的权限 仅空间所有者才能上传
-            if(!loginUser.getId().equals(space.getUserId())){
-                throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
-            }
+//            if(!loginUser.getId().equals(space.getUserId())){
+//                throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
+//            }
 
             /*校验额度*/
             if(space.getTotalCount() >= space.getMaxCount()){
@@ -127,10 +128,12 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             oldPicture = this.getById(pictureId);
             ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR,"图片不存在");
 
-            /*只有本人或管理员可以编辑图片*/
-            if(!oldPicture.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)){
-                throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
-            }
+            /*改为使用统一的satoken权限校验*/
+            //校验是否有空间的权限 仅空间所有者才能上传
+//            if(!loginUser.getId().equals(space.getUserId())){
+//                throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
+//            }
+
             //校验空间是否一致
             //没传spaceid则复用原有的图片的spaceid 这样也兼容了公共图库
             if(spaceId == null){
@@ -518,8 +521,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
         ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR);
 
+        /*目前改为satoken统一权限校验 所以不需要调用这个方法校验权限了*/
         //仅本人和管理员可以编辑 校验权限
-        checkPictureAuth(loginUser, oldPicture);
+        //checkPictureAuth(loginUser, oldPicture);
 
         // 操作数据库
         boolean result = this.updateById(picture);
@@ -537,8 +541,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         Picture oldPicture = this.getById(id);
         ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR);
 
+        /*目前改为satoken统一权限校验 所以不需要调用这个方法校验权限了*/
         //仅本人或管理员可删除 校验权限
-        checkPictureAuth(loginUser, oldPicture);
+        //checkPictureAuth(loginUser, oldPicture);
 
         /*更新空间的使用额度 涉及两个表 使用事务*/
         //开启事务
@@ -712,8 +717,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         Picture picture = Optional.ofNullable(this.getById(pictureId))
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND_ERROR,"图片不存在"));
 
+        /*目前改为satoken统一权限校验 所以不需要调用这个方法校验权限了*/
         //校验权限
-        checkPictureAuth(loginUser,picture);
+        //checkPictureAuth(loginUser,picture);
         //创建扩图任务
         CreateOutPaintingTaskRequest createOutPaintingTaskRequest = new CreateOutPaintingTaskRequest();
         CreateOutPaintingTaskRequest.Input input = new CreateOutPaintingTaskRequest.Input();

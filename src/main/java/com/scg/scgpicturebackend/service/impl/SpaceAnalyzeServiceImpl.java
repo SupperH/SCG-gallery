@@ -142,7 +142,7 @@ public class SpaceAnalyzeServiceImpl extends ServiceImpl<SpaceMapper, Space> imp
         Map<String,Long> tagCountMap =  tagsJsonList.stream()
                 //["java","python"],["java","php"] =>"java","python","java","php"
                 .flatMap(tagsJson -> JSONUtil.toList(tagsJson, String.class).stream())
-                //分组，计数
+                //分组，计数 将相同的 tag 分到一起，并统计每个 tag 出现的次数。
                 .collect(Collectors.groupingBy(tag -> tag, Collectors.counting()));
 
         //转换为响应对象，按照使用次数进行排序 拿到entrySet，map中的每一条记录 转成stream流 排序，把值映射到实体类，转成list返回
@@ -206,6 +206,7 @@ public class SpaceAnalyzeServiceImpl extends ServiceImpl<SpaceMapper, Space> imp
         switch (timeDimension){
             case "day":
                 //使用dateformat函数 把时间精确到天
+                // select DATE_FORMAT(createTime,'%Y_%m_%d') as period , count(*) count from picture group by period
                 queryWrapper.select("DATE_FORMAT(createTime,'%Y_%m_%d') as period","count(*) as count");
                 break;
             case "week":

@@ -11,7 +11,9 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.scg.scgpicturebackend.api.aliyunai.AliYunAiApi;
 import com.scg.scgpicturebackend.api.aliyunai.model.CreateOutPaintingTaskRequest;
 import com.scg.scgpicturebackend.api.aliyunai.model.CreateOutPaintingTaskResponse;
+import com.scg.scgpicturebackend.api.getpicturebatch.StartGetPictureBatch;
 import com.scg.scgpicturebackend.common.DeleteRequest;
+import com.scg.scgpicturebackend.constant.UrlConstant;
 import com.scg.scgpicturebackend.exception.BusinessException;
 import com.scg.scgpicturebackend.exception.ErrorCode;
 import com.scg.scgpicturebackend.exception.ThrowUtils;
@@ -438,36 +440,15 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
 
         ThrowUtils.throwIf(count > 30, ErrorCode.PARAMS_ERROR, "最多一次性抓取30张图片");
-        //抓取内容 这里使用bing图片的接口路径 然后q=%s动态拼接条件 当然也可以使用+号拼接字符串 如果要换其他接口 可能查询内容会加密 也许会有%s冲突
-        String fetchUrl = String.format("https://cn.bing.com/images/async?q=%S&mmasync=1",searchText);
-        //调用jsoup
-        Document document = null;
-        try {
-            document = Jsoup.connect(fetchUrl).get();
-        } catch (IOException e) {
-            log.error("获取页面失败",e);
-            throw new BusinessException(ErrorCode.OPERATION_ERROR,"获取页面失败");
-        }
-
-        //解析内容
-        Element div = document.getElementsByClass("dgControl").first();
-        if(ObjUtil.isEmpty(div)){
-            throw new BusinessException(ErrorCode.OPERATION_ERROR,"获取元素失败");
-        }
-        Elements imgElementList = div.select("img.mimg");
+        /*        抓取内容 这里使用bing图片的接口路径 然后q=%s动态拼接条件 当然也可以使用+号拼接字符串
+        如果要换其他接口 可能查询内容会加密 也许会有%s冲突*/
+        Elements imgElementList = StartGetPictureBatch.getPicturebatch(UrlConstant.BING_PICTURE_URL, searchText);
         //遍历元素，依次处理上传图片
         int uploadCount = 0;
         for(Element imgElement : imgElementList){
-            String fileUrl = imgElement.attr("src");
-            if(StrUtil.isBlank(fileUrl)){
-                log.info("当前链接为空，已跳过：{}",fileUrl);
-                continue;
-            }
-            //处理图片的url 防止转移或和cos存储冲突 因为腾讯云的cos接受不了很长很长的url 所以要把没意义的参数全部截断
-            int questionMarkIndex = fileUrl.indexOf("?");
-            if(questionMarkIndex > -1){
-                fileUrl = fileUrl.substring(0,questionMarkIndex);
-            }
+            /*处理图片url 每个网址的可能都不一样所以需要处理*/
+            String fileUrl = StartGetPictureBatch.processPictureUrl(imgElement);
+            if (fileUrl == null) continue;
 
             //上传图片
             PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
@@ -490,6 +471,27 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
         return uploadCount;
     }
+
+
+//    private static Elements getImgElementList(String searchText) {
+//        String fetchUrl = String.format("https://cn.bing.com/images/async?q=%S&mmasync=1", searchText);
+//        //调用jsoup
+//        Document document = null;
+//        try {
+//            document = Jsoup.connect(fetchUrl).get();
+//        } catch (IOException e) {
+//            log.error("获取页面失败",e);
+//            throw new BusinessException(ErrorCode.OPERATION_ERROR,"获取页面失败");
+//        }
+//
+//        //解析内容
+//        Element div = document.getElementsByClass("dgControl").first();
+//        if(ObjUtil.isEmpty(div)){
+//            throw new BusinessException(ErrorCode.OPERATION_ERROR,"获取元素失败");
+//        }
+//        Elements imgElementList = div.select("img.mimg");
+//        return imgElementList;
+//    }
 
     @Override
     public void editPicture(PictureEditRequest pictureEditRequest, User loginUser){

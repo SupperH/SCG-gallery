@@ -5,6 +5,7 @@ import cn.hutool.json.JSONUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+import com.scg.scgpicturebackend.manager.websocket.disruptor.PictureEditEventProducer;
 import com.scg.scgpicturebackend.manager.websocket.model.PictureEditActionEnum;
 import com.scg.scgpicturebackend.manager.websocket.model.PictureEditMessageTypeEnum;
 import com.scg.scgpicturebackend.manager.websocket.model.PictureEditRequestMessage;
@@ -35,7 +36,8 @@ public class PictureEditHandler extends TextWebSocketHandler {
 
     @Resource
     @Lazy
-    //private PictureEditEventProducer pictureEditEventProducer;
+    private PictureEditEventProducer pictureEditEventProducer;
+
 
     // 每张图片的编辑状态，key: pictureId, value: 当前正在编辑的用户 ID
     private final Map<Long, Long> pictureEditingUsers = new ConcurrentHashMap<>();
@@ -75,30 +77,32 @@ public class PictureEditHandler extends TextWebSocketHandler {
         User user = (User) session.getAttributes().get("user");
         Long pictureId = (Long) session.getAttributes().get("pictureId");
 
-        //根据传来的操作类型 获取枚举类 然后处理消息
-        String type = pictureEditRequestMessage.getType();
-        PictureEditMessageTypeEnum pictureEditMessageTypeEnum = PictureEditMessageTypeEnum.getEnumByValue(type);
+        //TODO 现在改为使用disruptor 生产消息到disruptor环形队列中
+        pictureEditEventProducer.publishEvent(pictureEditRequestMessage, session, user, pictureId);
 
-        //TODO 可以用策略模式改进
-        switch (pictureEditMessageTypeEnum) {
-            case ENTER_EDIT: //进入编辑状态
-                handlerEnterEditMessage(pictureEditRequestMessage,session,user,pictureId);
-                break;
-            case EXIT_EDIT: //退出编辑
-                handlerExitEditMessage(pictureEditRequestMessage,session,user,pictureId);
-                break;
-            case EDIT_ACTION: //编辑操作
-                handlerEditActionMessage(pictureEditRequestMessage,session,user,pictureId);
-                break;
-            default:
-                //其他消息类型，返回错误提示
-                PictureEditResponseMessage pictureEditResponseMessage = new PictureEditResponseMessage();
-                pictureEditResponseMessage.setType(PictureEditMessageTypeEnum.ERROR.getValue());
-                pictureEditResponseMessage.setMessage("未知的消息类型");
-                pictureEditResponseMessage.setUser(userService.getUserVO(user));
-                session.sendMessage(new TextMessage(JSONUtil.toJsonStr(pictureEditResponseMessage)));
-                break;
-        }
+        //根据传来的操作类型 获取枚举类 然后处理消息
+//        String type = pictureEditRequestMessage.getType();
+//        PictureEditMessageTypeEnum pictureEditMessageTypeEnum = PictureEditMessageTypeEnum.getEnumByValue(type);
+
+//        switch (pictureEditMessageTypeEnum) {
+//            case ENTER_EDIT: //进入编辑状态
+//                handlerEnterEditMessage(pictureEditRequestMessage,session,user,pictureId);
+//                break;
+//            case EXIT_EDIT: //退出编辑
+//                handlerExitEditMessage(pictureEditRequestMessage,session,user,pictureId);
+//                break;
+//            case EDIT_ACTION: //编辑操作
+//                handlerEditActionMessage(pictureEditRequestMessage,session,user,pictureId);
+//                break;
+//            default:
+//                //其他消息类型，返回错误提示
+//                PictureEditResponseMessage pictureEditResponseMessage = new PictureEditResponseMessage();
+//                pictureEditResponseMessage.setType(PictureEditMessageTypeEnum.ERROR.getValue());
+//                pictureEditResponseMessage.setMessage("未知的消息类型");
+//                pictureEditResponseMessage.setUser(userService.getUserVO(user));
+//                session.sendMessage(new TextMessage(JSONUtil.toJsonStr(pictureEditResponseMessage)));
+//                break;
+//        }
 
 
     }
@@ -138,7 +142,7 @@ public class PictureEditHandler extends TextWebSocketHandler {
             //构造响应 发送具体的操作通知
             PictureEditResponseMessage pictureEditResponseMessage = new PictureEditResponseMessage();
             pictureEditResponseMessage.setType(PictureEditMessageTypeEnum.EDIT_ACTION.getValue());
-            String message = String.format("用户 %s 执行了 %s", user.getUserName());
+            String message = String.format("用户 %s 执行了 %s", user.getUserName(),actionEnum.getText());
             pictureEditResponseMessage.setMessage(message);
             pictureEditResponseMessage.setEditAction(editAction);
             pictureEditResponseMessage.setUser(userService.getUserVO(user)); //脱敏用户信息再发送

@@ -34,7 +34,7 @@ import java.util.*;
 
 import static com.scg.scgpicturebackend.constant.UserConstant.USER_LOGIN_STATE;
 
-
+// 这个配合注解使用 在执行方法之前会执行这里的代码 如果用了注解的话
 /**
  * 自定义权限加载接口实现类
  */

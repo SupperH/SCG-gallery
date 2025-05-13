@@ -20,7 +20,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-//空间成员权限管理
+//空间成员权限管理 通用的 用于编程式的权限管理
 @Component
 public class SpaceUserAuthManager {
     @Resource

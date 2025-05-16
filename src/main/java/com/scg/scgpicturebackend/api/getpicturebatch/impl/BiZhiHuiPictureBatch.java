@@ -12,6 +12,7 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 public class BiZhiHuiPictureBatch implements GetPictureBatchStrategy {
@@ -36,7 +37,6 @@ public class BiZhiHuiPictureBatch implements GetPictureBatchStrategy {
             Elements imgElementList = div.select("img");
             return imgElementList;
     }
-
     @Override
     public String processPictureUrl(Element imgElement) {
         String fileUrl = imgElement.attr("src");

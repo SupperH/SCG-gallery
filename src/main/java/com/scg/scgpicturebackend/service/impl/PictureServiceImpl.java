@@ -36,6 +36,7 @@ import com.scg.scgpicturebackend.service.SpaceService;
 import com.scg.scgpicturebackend.service.UserService;
 import com.scg.scgpicturebackend.utils.ColorSimilarUtils;
 import com.scg.scgpicturebackend.utils.ColorTransformUtils;
+import com.scg.scgpicturebackend.utils.ExecutorUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -54,6 +55,8 @@ import java.awt.*;
 import java.io.IOException;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 /**
@@ -441,60 +444,69 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             namePrefix = searchText;
         }
 
-
         ThrowUtils.throwIf(count > 30, ErrorCode.PARAMS_ERROR, "最多一次性抓取30张图片");
         /*        抓取内容 这里使用bing图片的接口路径 然后q=%s动态拼接条件 当然也可以使用+号拼接字符串
         如果要换其他接口 可能查询内容会加密 也许会有%s冲突*/
         Elements imgElementList = StartGetPictureBatch.getPicturebatch(UrlConstant.BING_PICTURE_URL, searchText);
-        //遍历元素，依次处理上传图片
-        int uploadCount = 0;
+        //打印获取的url
+        imgElementList.stream().forEach(imgElement -> System.out.println(StartGetPictureBatch.processPictureUrl(imgElement)));
+
+        /*2025/5/16 使用Future改进批量上传图片接口 使用异步多线程*/
+        //IO密集型任务 涉及文件上传cos 按理来说核心线程数应该是2n+1 但是这里根据图片数量并且考虑到网络影响 所以动态分配
+        ExecutorService pictureUploadExecutor = ExecutorUtils.createDynamicUploadExecutor(count,"upload-picture",ExecutorUtils.IO_TASK);
+
+        //用于整理结果 想阻塞等待的话就放开这行
+        //List<CompletableFuture<Boolean>> futures = new ArrayList<>();
+
+        //多线程任务 使用原子类的integer确保数量正确 用于多线程中图片编号
+        AtomicInteger uploadCount = new AtomicInteger(0);
+        //用于控制循环次数
+        int submittedCount = 0;
         for(Element imgElement : imgElementList){
-            /*处理图片url 每个网址的可能都不一样所以需要处理*/
+            if(submittedCount >=count){
+                break;
+            }
+             /*处理图片url 每个网址的可能都不一样所以需要处理*/
             String fileUrl = StartGetPictureBatch.processPictureUrl(imgElement);
             if (fileUrl == null) continue;
 
-            //上传图片
-            PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
-            pictureUploadRequest.setFileUrl(fileUrl);
-            pictureUploadRequest.setPicName(namePrefix + (uploadCount + 1));
-            try {
-                PictureVO pictureVO = this.uploadPicture(fileUrl, pictureUploadRequest, loginUser);
-                log.info("上传图片成功：{}",pictureVO.getId());
-                uploadCount++;
-            } catch (Exception e) {
-                log.error("上传图片失败：{}",e);
-                continue;
-            }
+            submittedCount++;
+            //使用comFuture异步执行任务
+            String finalNamePrefix = namePrefix; //因为在多线程中有改窜的风险 所以要重新赋值一次
+            //runAsync方法没有返回值 supplyAsync要返回值
+            CompletableFuture.runAsync(() ->{
+                try {
+                    PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
+                    pictureUploadRequest.setFileUrl(fileUrl);
+                    pictureUploadRequest.setPicName(finalNamePrefix + (uploadCount.get() + 1));
 
-            //如果成功上传了图片数量大于限制数量 就结束循环
-            if(uploadCount > count){
-                break;
-            }
+                    PictureVO pictureVO = this.uploadPicture(fileUrl, pictureUploadRequest, loginUser);
+                    log.info("上传图片成功：{}", pictureVO.getId());
+                    uploadCount.incrementAndGet();  // 成功了才自增
+                }catch (Exception e){
+                    log.error("上传图片失败：{}",e);
+                }
+            },pictureUploadExecutor); //把任务提交给指定线程池
+            //futures.add(future);
         }
+        return 1;
 
-        return uploadCount;
-    }
-
-
-//    private static Elements getImgElementList(String searchText) {
-//        String fetchUrl = String.format("https://cn.bing.com/images/async?q=%S&mmasync=1", searchText);
-//        //调用jsoup
-//        Document document = null;
+        //阻塞等待结果全部完成
 //        try {
-//            document = Jsoup.connect(fetchUrl).get();
-//        } catch (IOException e) {
-//            log.error("获取页面失败",e);
-//            throw new BusinessException(ErrorCode.OPERATION_ERROR,"获取页面失败");
-//        }
+//            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+//                    .get(5, TimeUnit.MINUTES);
 //
-//        //解析内容
-//        Element div = document.getElementsByClass("dgControl").first();
-//        if(ObjUtil.isEmpty(div)){
-//            throw new BusinessException(ErrorCode.OPERATION_ERROR,"获取元素失败");
+//            //关闭线程池
+//            pictureUploadExecutor.shutdown();
+//
+//            long end = System.currentTimeMillis();
+//            System.out.println("花费时间：" + (end - start));
+//            return uploadCount.get();
+//
+//        } catch (Exception e) {
+//            throw new BusinessException(ErrorCode.OPERATION_ERROR,"任务超时");
 //        }
-//        Elements imgElementList = div.select("img.mimg");
-//        return imgElementList;
-//    }
+    }
 
     @Override
     public void editPicture(PictureEditRequest pictureEditRequest, User loginUser){

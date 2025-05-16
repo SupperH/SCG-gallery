@@ -12,6 +12,8 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
+
 @Slf4j
 public class BingPictureBatch implements GetPictureBatchStrategy {
     @Override
